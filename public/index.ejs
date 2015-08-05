@@ -1,0 +1,13 @@
+<% if(!driveAuth){ %>
+    <form action="/driveAuth" method="GET" >
+        <input type="submit" value="Acceso Drive" />
+    </form>
+<% } %>
+<form action="/reload" method="GET" >
+    <input type="submit" value="Recargar Datos" />
+</form>
+<table>
+<% for(var i=0;i<items.length;i++){ %>
+    <tr><td title="<%= items[i].id %>"><%= items[i].title %></td><td><%= items[i].mimeType %></td></tr>
+<% } %>
+</table>

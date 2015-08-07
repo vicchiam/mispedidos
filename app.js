@@ -1,23 +1,13 @@
 var express=require("express");
 var path = require('path');
-
-var fs = require('fs');
-var readline = require('readline');
-var google = require('googleapis');
-var googleAuth = require('google-auth-library');
-
-var open=require("open");
 var bodyParser = require('body-parser');
-var partials= require("express-partials")
-
-var SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly'];
-var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE) + '/.credentials/';
-var TOKEN_PATH = TOKEN_DIR + 'drive-api-quickstart.json';
+var partials= require("express-partials");
+var logica = require('./logica');
 
 var app=express();
 
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 var port=8080;
 
@@ -38,89 +28,12 @@ app.use(function(req, res, next) {
 	}
 });
 
-app.get("/",function(req,res){
-    if(fs.existsSync(TOKEN_PATH)){
-        listFiles(res);
-    }
-    else{
-        res.render("index.ejs",{title:"Mis Pedidos",driveAuth:false,items:[]});
-    }
-});
+app.get("/",logica.inicio);
 
-app.get("/driveAuth",driveAuthFunction);
+app.get("/driveAuth",logica.driveAutentificacion);
 
-app.post("/driveAuthCode",driveAuthStore);
+app.get("/oauth2callback",logica.driveGuardarAutentificacion);
 
-app.get("/reload",function(req,res){
-
-});
+app.get("/gestionFicheros",logica.gestionFicheros);
 
 app.listen(port);
-
-//Funciones
-
-function driveAuthFunction(req,res){
-    oauth2Client=getOauth2Client();
-    var authUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: SCOPES
-    });
-    open(authUrl);
-    res.render("driveAuth.ejs",{title:"Pegar código"});
-}
-
-function driveAuthStore(req,res){
-    var code=req.body.code;
-    oauth2Client.getToken(code, function(err, token) {
-        oauth2Client.credentials = token;
-        try {
-          fs.mkdirSync(TOKEN_DIR);
-        } catch (err) {
-          if (err.code != 'EEXIST') {
-            throw err;
-          }
-        }
-        fs.writeFile(TOKEN_PATH, JSON.stringify(token));
-        console.log('Token stored to ' + TOKEN_PATH);
-        res.render("guardado.ejs",{title:"Guardado"});
-    });
-}
-
-function getOauth2Client(){
-    var content=fs.readFileSync('client_secret.json');
-    var credentials=JSON.parse(content);
-    var clientSecret = credentials.installed.client_secret;
-    var clientId = credentials.installed.client_id;
-    var redirectUrl = credentials.installed.redirect_uris[0];
-    var auth = new googleAuth();
-    var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
-    return oauth2Client;
-}
-
-/**
- * Lists the names and IDs of up to 10 files.
- *
- * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
- */
-function listFiles(res) {
-    oauth2Client=getOauth2Client();
-    var token=fs.readFileSync(TOKEN_PATH);
-    oauth2Client.credentials = JSON.parse(token);
-    var items=[];
-    var service = google.drive('v2');
-    service.files.list(
-        {
-            auth: oauth2Client,
-            maxResults: 10,
-        },
-        function(err2, response) {
-            if (err2) {
-                console.log('The API returned an error: ' + err2);
-                return;
-            }
-            items = response.items;
-            //console.log(items);
-            res.render("index.ejs",{title:"Mis Pedidos",driveAuth:true,items:items});
-        }
-    );
-}

@@ -1,0 +1,16 @@
+<div id="directorio">
+    <h2>Archivos en el directorio</h2>
+    <table>
+    <% for(var i=0;i<directorio.length;i++){ %>
+        <tr><td><%= directorio[i].title %></td><td><%= directorio[i].modifiedDate %></td></tr>
+    <% } %>
+    </table>
+</div>
+<div id="drive">
+    <h2>Archivos en el Drive</h2>
+    <table>
+    <% for(var i=0;i<drive.length;i++){ %>
+        <tr><td><%= drive[i].title %></td><td><%= drive[i].modifiedDate %></td></tr>
+    <% } %>
+    </table>
+</div>

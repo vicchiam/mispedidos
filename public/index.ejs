@@ -3,11 +3,6 @@
         <input type="submit" value="Acceso Drive" />
     </form>
 <% } %>
-<form action="/reload" method="GET" >
-    <input type="submit" value="Recargar Datos" />
+<form action="/gestionFicheros" method="GET" >
+    <input type="submit" value="Gestionar Ficheros" />
 </form>
-<table>
-<% for(var i=0;i<items.length;i++){ %>
-    <tr><td title="<%= items[i].id %>"><%= items[i].title %></td><td><%= items[i].mimeType %></td></tr>
-<% } %>
-</table>

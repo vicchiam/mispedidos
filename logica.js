@@ -10,11 +10,15 @@ var TOKEN_PATH = TOKEN_DIR + 'drive-api-quickstart.json';
 var PARENT_FOLDER_ID="0BxmjFM_vQC_6fmQ0aXY5TGd5NGRxOE1qQnBrMmtuSWxBMlFsSEJEZUQ1MzlOWnVkUHdSSUk";
 
 var FILE_DB="mispedidos.db";
+var FILES_DIR="./files";
+
+var global_dir=[];
+var global_drive=[];
 
 exports.inicio=function inicio(req,res){
     if(!fs.existsSync(FILE_DB)){
     	var db=new sqlite3.Database(FILE_DB);
-    	var SQL="CREATE TABLE ARCHIVOS(id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT UNIQUE, fecha TEXT, id_drive TEXT)";
+    	var SQL="CREATE TABLE ARCHIVOS(id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT UNIQUE, fecha TEXT)";
     	db.run(SQL);
     	console.log("Database Created");
     	db.close();
@@ -52,59 +56,7 @@ exports.driveGuardarAutentificacion=function driveGuardarAutentificacion(req,res
         }
         fs.writeFile(TOKEN_PATH, JSON.stringify(token));
         console.log('Token stored to ' + TOKEN_PATH);
-        res.render("guardado.ejs",{title:"Guardado"});
-    });
-}
-
-exports.gestionFicheros=function gestionFicheros(req, res){
-    //Archivos que estan en el directorio
-    var archivos_dir=fs.readdirSync("./files");
-    //Archivos para eliminar de BD
-    var eliminar_db=[];
-    //Archivos que estan en el DIR y en BD
-    var archivos_both=[];
-
-    var db=new sqlite3.Database(FILE_DB);
-	var SQL="SELECT * FROM ARCHIVOS";
-	db.all(SQL,function(err,rows){
-		if(err){
-			console.log("ERR "+err);
-		}
-        console.log(archivos_dir);
-        for(var i=0;i<rows.length;i++){
-            var row=rows[i];
-            console.log(row.nombre+" "+archivos_dir.indexOf(row.nombre));
-            if(archivos_dir.indexOf(row.nombre)<0){
-                //Esta en BD pero no en directorio -> Marcado para eliminar de BD
-                eliminar_db.push(row.id);
-            }
-            else{
-                //Esta en BD y en Directorio
-                var archivo=new Object();
-    			archivo.id=row.id;
-    			archivo.nombre=row.nombre;
-    			archivo.tick=row.tick;
-    			archivo.fecha=row.fecha;
-    			archivo.id_drive=row.id_drive;
-    			archivos_both.push(archivo);
-                archivos_dir[archivos_dir.indexOf(row.nombre)]=null;
-            }
-		}
-        //Eliminamos los borrados
-        for(var j=0;j<eliminar_db.length;j++){
-            var SQL="DELETE FROM ARCHIVOS WHERE id=?";
-        	db.run(SQL,eliminar_db[j]);
-        }
-
-        //Insertamos los nuevo archivos
-        for(var j=0;j<archivos_dir.length;j++){
-            if(archivos_dir[j]!=null){
-                var SQL="INSERT INTO ARCHIVOS (nombre,fecha,id_drive) VALUES(?,CURRENT_TIMESTAMP,0)";
-            	db.run(SQL,archivos_dir[j]);
-            }
-        }
-        db.close();
-        listar(res);
+        res.render("guardado.ejs",{title:"Acceso a drive"});
     });
 }
 
@@ -119,30 +71,88 @@ function getOauth2Client(){
     return oauth2Client;
 }
 
-function listar(res){
-    listarDirectorio(res);
+exports.gestionFicheros=function gestionFicheros(req, res){
+    obtenerArchivosBD(res,sincronizarDirectorioBD);
 }
 
-function listarDirectorio(res){
+function obtenerArchivosBD(res,callback){
     var db=new sqlite3.Database(FILE_DB);
 	var SQL="SELECT * FROM ARCHIVOS";
-	db.all(SQL,function(err,rows){
-		if(err){
-			console.log("ERR "+err);
-		}
-        var directorio=[];
-        for(var i=0;i<rows.length;i++){
-            var row=rows[i];
-            var archivo=new Object();
-			archivo.id=row.id;
-			archivo.title=row.nombre;
-			archivo.modifiedDate=row.fecha;
-			archivo.id_drive=row.id_drive;
-			directorio.push(archivo);
-        }
-		db.close();
-        listarDrive(res,directorio)
+    db.all(SQL,function(err,rows){
+        callback(res,rows);
+        db.close();
     });
+}
+
+function sincronizarDirectorioBD(res,archivos_bd){
+    //Archivos que estan en el directorio
+    var archivos_dir=fs.readdirSync(FILES_DIR)
+        .map(function(v) {
+            return {
+                nombre:v,
+                fecha:fs.statSync(FILES_DIR +"/"+ v).mtime.getTime()
+            };
+        });
+
+    var SQL_S=[];
+    var archivos_encontrados=[];
+
+    for(var i=0;i<archivos_dir.length;i++){
+        var f_dir=archivos_dir[i];
+        var encontrado=false;
+        for(var j=0;j<archivos_bd.length && !encontrado;j++){
+            f_bd=archivos_bd[j];
+            if(f_bd.nombre==f_dir.nombre){
+                //El archivo esta en el directorio y en la BBDD
+                var date_dir=new Date(f_dir.fecha);
+                var date_bd=new Date(f_bd.fecha);
+                //Descartar hasta el segundo
+                var d1=Math.ceil(date_dir.getTime()/10000);
+                var d2=Math.ceil(date_bd.getTime()/10000);
+                //console.log(d1+" "+d2);
+                if(d1>d2){
+                    //Actualizo la fecha en BBDD
+                    var SQL="UPDATE ARCHIVOS SET fecha='"+date_dir.toString()+"' where id="+f_bd.id+" ";
+                    SQL_S.push(SQL);
+                }
+                encontrado=true;
+                archivos_encontrados.push(f_dir.nombre);
+            }
+        }
+    }
+
+    for(var i=0;i<archivos_dir.length;i++){
+        if(archivos_encontrados.indexOf(archivos_dir[i].nombre)<0){
+            //Esta en el directorio pero no en la BD -> Insertamos
+            var SQL="INSERT INTO ARCHIVOS(nombre,fecha) VALUES('"+archivos_dir[i].nombre+"','"+new Date(archivos_dir[i].fecha).toString()+"')";
+            SQL_S.push(SQL);
+        }
+    }
+
+    for(var i=0;i<archivos_bd.length;i++){
+        if(archivos_encontrados.indexOf(archivos_bd[i].nombre)<0){
+            //Archivo que esta en la BBDD y no en el directorio -> Borrar
+            var SQL="DELETE FROM ARCHIVOS WHERE id="+archivos_bd[i].id+" ";
+            SQL_S.push(SQL);
+        }
+    }
+
+    //Ejecutamos todas las sentencias
+    var db=new sqlite3.Database(FILE_DB);
+    ejecutaSQL(res,SQL_S,db,0)
+}
+
+//Funcion para sincronizar las operaciones sobre BBDD
+function ejecutaSQL(res,SQL_S,db,i){
+    if(i==SQL_S.length){
+        db.close;
+        obtenerArchivosBD(res,listarDrive);
+    }
+    else{
+        db.run(SQL_S[i],function(err){
+            ejecutaSQL(res,SQL_S,db,++i);
+        });
+    }
 }
 
 function listarDrive(res,directorio) {
@@ -162,56 +172,141 @@ function listarDrive(res,directorio) {
                 return;
             }
             drive = response.items;
-            res.render("gestion.ejs",{title:"Gestion Archivos",directorio:directorio,drive:drive});
+            global_dir=directorio.sort(compareDir);
+            global_drive=drive.sort(compareDrive);
+            res.render("gestion.ejs",{title:"Gestión de Archivos",directorio:directorio,drive:drive});
         }
     );
 }
 
+function compareDir(a,b){
+    if(a.nombre>b.nombre){
+        return 1;
+    }
+    else if (a.nombre<b.nombre) {
+        return -1;
+    }
+    return 0;
+}
 
-function driveInsertar(file){
+function compareDrive(a,b){
+    if(a.title>b.title){
+        return 1;
+    }
+    else if (a.title<b.title) {
+        return -1;
+    }
+    return 0;
+}
+
+exports.sincronizarDrive=function sincronizarDrive(req,res){
+    var archivos_encontrados=[];
+    var mensajes=[];
+
+    for(var i=0;i<global_dir.length;i++){
+        var f_dir=global_dir[i];
+        var encontrado=false;
+        for(var j=0;j<global_drive.length && !encontrado;j++){
+            var f_drive=global_drive[j];
+            if(f_dir.nombre==f_drive.title){
+                encontrado=true;
+                var date_dir=new Date(f_dir.fecha);
+                var date_drive=new Date(f_drive.modifiedDate);
+                var d1=Math.ceil(date_dir.getTime()/10000);
+                var d2=Math.ceil(date_drive.getTime()/10000);
+                console.log(d1+"  "+d2);
+                if(d1>d2){
+                    //console.log("Modificar "+global_drive[i].title);
+                    actualizarDrive(f_dir,f_drive.id);
+                    mensajes.push("Modificado: El archivo "+f_dir[i].nombre+" se ha modificado");
+                }
+                archivos_encontrados.push(f_drive.title);
+            }
+        }
+    }
+
+    for(var i=0;i<global_dir.length;i++){
+        if(archivos_encontrados.indexOf(global_dir[i].nombre)<0){
+            //Esta en el directorio pero no en el drive - Insertar
+            //console.log(global_dir[i]);
+            insertarDrive(global_dir[i]);
+            mensajes.push("Insertado: El archivo "+global_dir[i].nombre+" se ha insertado");
+        }
+    }
+
+    for(var i=0;i<global_drive.length;i++){
+        if(archivos_encontrados.indexOf(global_drive[i].title)<0){
+            //Esta en el drive pero no en el directorio -> Eliminar
+            //console.log("Eliminar "+global_drive[i].title);
+            eliminarDrive(global_drive[i].id);
+            mensajes.push("Eliminado: El archivo "+global_drive[i].title+" se ha eliminado");
+        }
+    }
+
+    res.render("sincronizar.ejs",{title:"Sincronizar Archivos",mensajes:mensajes});
+}
+
+function insertarDrive(file){
     var oauth2Client=getOauth2Client();
     var token=fs.readFileSync(TOKEN_PATH);
     oauth2Client.credentials = JSON.parse(token);
 
-    var fstatus = fs.statSync(file);
-    fs.open(file, 'r', function(status, fileDescripter) {
-
-        var buffer = new Buffer(fstatus.size);
-        fs.read(fileDescripter, buffer, 0, fstatus.size, 0, function(err, num) {
-            console.log("REQUEST.POST");
-            request.post({
-                'url': 'https://www.googleapis.com/upload/drive/v2/files',
-                'qs': {
-                    //request module adds "boundary" and "Content-Length" automatically.
-                    'uploadType': 'multipart'
-                },
-                'headers' : {
-                    'Authorization': 'Bearer '+ oauth2Client.credentials.access_token
-                },
-                'multipart':  [
-                    {
-                        'Content-Type': 'application/json; charset=UTF-8',
-                        'body': JSON.stringify({
-                            'title': file,
-                            'parents': [
-                                {
-                                    'id': PARENT_FOLDER_ID
-                                }
-                            ]
-                        })
-                    },
-                    {
-                        'Content-Type': 'text/csv',
-                        'body': buffer
-                    }
-                ]
-            },
-            function (error, response, body){
-                console.log(body);
-            });
+    var gDrive=google.drive('v2');
+    var buff=fs.createReadStream(FILES_DIR+"/"+file.nombre);
+    // insertion example
+    gDrive.files.insert({
+        resource: {
+            title: file.nombre,
+            mimeType: 'text/csv',
+            parents: [{"id":PARENT_FOLDER_ID}]
+        },
+        media: {
+            mimeType: 'text/csv',
+            body: buff
+        },
+        auth: oauth2Client
+        },
+        function(err, response) {
+            //console.log('error:', err, 'inserted:', response.id);
         });
+}
 
-        console.log("FIN");
+function actualizarDrive(file,id_drive){
+    var oauth2Client=getOauth2Client();
+    var token=fs.readFileSync(TOKEN_PATH);
+    oauth2Client.credentials = JSON.parse(token);
 
+    var gDrive=google.drive('v2');
+    var buff=fs.createReadStream(FILES_DIR+"/"+file.nombre);
+    // insertion example
+    gDrive.files.update({
+        fileId: id_drive,
+        resource: {
+            title: file.nombre,
+            mimeType: 'text/csv'
+        },
+        media: {
+            mimeType: 'text/csv',
+            body: buff
+        },
+        auth: oauth2Client
+        },
+        function(err, response) {
+            //console.log('error:', err, 'inserted:', response.id);
+        });
+}
+
+function eliminarDrive(id_drive){
+    var oauth2Client=getOauth2Client();
+    var token=fs.readFileSync(TOKEN_PATH);
+    oauth2Client.credentials = JSON.parse(token);
+
+    var gDrive=google.drive('v2');
+    gDrive.files.delete({
+        'fileId': id_drive,
+        auth: oauth2Client
+    },
+    function(err, response) {
+        //console.log("Eliminar "+err);
     });
 }

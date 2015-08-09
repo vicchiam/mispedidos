@@ -14,6 +14,7 @@ var port=8080;
 app.set('views', path.join(__dirname, 'public'));
 app.set('views engine', 'ejs');
 app.use(partials());
+app.use(express.static(path.join(__dirname, 'public')));
 
 //CORS
 app.use(function(req, res, next) {
@@ -28,6 +29,11 @@ app.use(function(req, res, next) {
 	}
 });
 
+/*app.get("/",function(req,res){
+	mensajes=["Archivo XXXXXXXX ACTUALIZADO","Archivo XXXXXXXX ACTUALIZADO","Archivo XXXXXXXX ACTUALIZADO","Archivo XXXXXXXX ACTUALIZADO"]
+	res.render("sincronizar.ejs",{title:"Sincronizar Archivos",mensajes:mensajes});
+});*/
+
 app.get("/",logica.inicio);
 
 app.get("/driveAuth",logica.driveAutentificacion);
@@ -35,5 +41,7 @@ app.get("/driveAuth",logica.driveAutentificacion);
 app.get("/oauth2callback",logica.driveGuardarAutentificacion);
 
 app.get("/gestionFicheros",logica.gestionFicheros);
+
+app.get("/sincronizarDrive",logica.sincronizarDrive);
 
 app.listen(port);

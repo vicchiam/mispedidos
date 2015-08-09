@@ -1,0 +1,178 @@
+*{
+    margin: 0;
+    padding: 0;
+}
+
+html, body{
+    width: 100%;
+    height: 100%;
+    font-family: 'Roboto', sans-serif;
+    color:#777777;
+}
+
+/*CABECERA*****************************************************/
+
+#header{
+    height: 20%;
+    min-height: 120px;
+    background-color: #4682B4;
+}
+#header h1{
+    width: 96%;
+    margin-left: 3%;
+    padding-top: 3%;
+    font-size: 58px;
+    color: #ffffff;
+}
+
+/*CUERPO*********************************************************/
+
+#cuerpo{
+    height: 76%;
+    text-align: center;
+    background-color: #F8F8FF;
+}
+
+/*MENSAJES*****************************************************/
+
+#cuerpo .mensaje{
+    display: inline-block;
+    min-width: 300px;
+    min-height: 200px;
+    background-color: #ffffff;
+    box-shadow: 5px 5px 2px #999999;
+    border: 1px solid #999999;
+    margin-top: 10px;
+    padding: 20px;
+}
+
+#cuerpo .mensaje a{
+    margin-top: 20px;
+}
+
+
+/*INDEX*********************************************************/
+
+#cuerpo .ficha{
+    display: inline-block;
+    width: 200px;
+    height: 200px;
+    border: 1px solid #999999;
+    background-color: #ffffff;
+    margin: 50px;
+    box-shadow: 5px 5px 2px #999999;
+    text-decoration: none;
+    font-size: 14px;
+    outline: none;
+    color:#777777;
+}
+
+#cuerpo .ficha:hover{
+    box-shadow: none;
+}
+
+#cuerpo .ficha div{
+    margin: 5px;
+    width: 190px;
+    height: 190px;
+}
+
+#authDrive{
+    background: url("/resources/drive.png");
+    background-size: 150px 150px;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+#authDropbox{
+    background: url("/resources/dropbox.png");
+    background-size: 170px 170px;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+#gestFicheros{
+    background: url("/resources/files.png");
+    background-size: 180px 170px;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/*GESTION****************************************************/
+
+#cuerpo .listado{
+    width: 40%;
+    min-width: 350px;
+    min-height: 200px;
+    float: left;
+    margin: 40px;
+    background-color: #ffffff;
+    border: 1px solid #999999;
+    box-shadow: 5px 5px 2px #999999;
+    text-align: left;
+    position: relative;
+}
+
+#cuerpo .listado .image{
+    float: left;
+    display: inline-block;
+    padding: 8px;
+    background-color: #ADD8E6;
+    margin: 10px;
+    border-radius: 30px;
+}
+
+#cuerpo .listado img{
+    width: 30px;
+    height: 30px;
+}
+
+#cuerpo .listado h3{
+    margin: 10px;
+}
+
+#cuerpo .listado table{
+    margin-left: 45px;
+}
+
+#cuerpo .listado table td{
+    padding: 2px 5px;
+}
+
+#sincDrive{
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+}
+
+/*PIE**********************************************************/
+
+#footer{
+    height: 30px;
+    width: 100%;
+    text-align: center;
+    background-color: #4682B4;
+    position: fixed;
+    bottom: 0px;
+}
+#footer span{
+    display: inline-block;
+    margin-top: 5px;
+    color:#ffffff;
+}
+
+/*GENERALES*********************************************************/
+
+.button{
+    text-decoration: none;
+    color: #ffffff;
+    display: inline-block;
+    padding: 5px;
+    background-color: #ADD8E6;
+    box-shadow: 2px 2px 1px #999999;
+    outline: none;
+}
+
+.button:hover{
+    background-color: #87CEFA;
+}

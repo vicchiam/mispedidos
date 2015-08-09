@@ -1,8 +1,5 @@
 <% if(!driveAuth){ %>
-    <form action="/driveAuth" method="GET" >
-        <input type="submit" value="Acceso Drive" />
-    </form>
+    <a class="ficha" href="/driveAuth"><div id="authDrive">Autenticarse en Drive</div></a>
 <% } %>
-<form action="/gestionFicheros" method="GET" >
-    <input type="submit" value="Gestionar Ficheros" />
-</form>
+    <a class="ficha" href="#"><div id="authDropbox">Autenticarse en Dropbox</div></a>
+    <a class="ficha" href="/gestionFicheros"><div id="gestFicheros">Gestión de ficheros</div></a>

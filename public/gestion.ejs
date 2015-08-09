@@ -1,16 +1,47 @@
-<div id="directorio">
-    <h2>Archivos en el directorio</h2>
+<div class="listado" id="local">
+    <div class="image">
+        <img src="/resources/folder.png" />
+    </div>
+    <h3>Archivos en local</h3>
     <table>
-    <% for(var i=0;i<directorio.length;i++){ %>
-        <tr><td><%= directorio[i].title %></td><td><%= directorio[i].modifiedDate %></td></tr>
+    <% for(var i=0;i<directorio.length;i++){
+        var d=new Date(directorio[i].fecha);
+        var dia=d.getDate();
+        if(dia<10) dia="0"+dia;
+        var mes=d.getMonth()+1;
+        if(mes<10) mes="0"+mes;
+        var anyo=d.getFullYear();
+        var hora=d.getHours();
+        if(hora<10) hora="0"+hora;
+        var min=d.getMinutes();
+        if(min<10) min="0"+min;
+        var fecha= dia+"/"+mes+"/"+anyo+" "+hora+":"+min;
+    %>
+        <tr><td>- <%= directorio[i].nombre %></td><td><%= fecha %></td></tr>
     <% } %>
     </table>
 </div>
-<div id="drive">
-    <h2>Archivos en el Drive</h2>
+<div class="listado" id="drive">
+    <div class="image">
+        <img src="/resources/drive.png" />
+    </div>
+    <h3>Archivos en el Drive</h3>
     <table>
-    <% for(var i=0;i<drive.length;i++){ %>
-        <tr><td><%= drive[i].title %></td><td><%= drive[i].modifiedDate %></td></tr>
+    <% for(var i=0;i<drive.length;i++){
+        var d=new Date(drive[i].modifiedDate);
+        var dia=d.getDate();
+        if(dia<10) dia="0"+dia;
+        var mes=d.getMonth()+1;
+        if(mes<10) mes="0"+mes;
+        var anyo=d.getFullYear();
+        var hora=d.getHours();
+        if(hora<10) hora="0"+hora;
+        var min=d.getMinutes();
+        if(min<10) min="0"+min;
+        var fecha= dia+"/"+mes+"/"+anyo+" "+hora+":"+min;
+    %>
+        <tr><td title="<%= drive[i].id %>">- <%= drive[i].title %></td><td><%= fecha %></td></tr>
     <% } %>
     </table>
+    <a id="sincDrive" class="button" href="/sincronizarDrive" >Sincronizar</a>
 </div>

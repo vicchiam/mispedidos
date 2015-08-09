@@ -1,0 +1,13 @@
+<div class="mensaje">
+    <% if(mensajes.length>0){ %>
+        <h1>Archivos modificados:</h1>
+    <% } %>
+    <% for(var i=0;i<mensajes.length;i++){ %>
+
+        <h3><%= mensajes[i] %></h3>
+    <% } %>
+    <% if(mensajes.length==0){ %>
+        <h1>Sin cambios</h1>
+    <% } %>
+    <a class="button" href="/gestionFicheros">Volver</a>
+</div>

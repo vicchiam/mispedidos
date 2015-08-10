@@ -1,19 +1,27 @@
 var fs = require('fs');
 var google = require('googleapis');
 var googleAuth = require('google-auth-library');
+//var dropbox = require("dbox");
 var request = require('request');
-var sqlite3=require("sqlite3").verbose();
+var sqlite3 = require("sqlite3").verbose();
 
-var SCOPES = ['https://www.googleapis.com/auth/drive'];
+var util = require("util");
+
+var URI_DRIVE = ['https://www.googleapis.com/auth/drive'];
+var URI_DBOX = ["https://www.dropbox.com/1/oauth2/authorize","https://api.dropbox.com/1/oauth2/token"];
 var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE) + '/.credentials/';
-var TOKEN_PATH = TOKEN_DIR + 'drive-api-quickstart.json';
-var PARENT_FOLDER_ID="0BxmjFM_vQC_6fmQ0aXY5TGd5NGRxOE1qQnBrMmtuSWxBMlFsSEJEZUQ1MzlOWnVkUHdSSUk";
+var TOKEN_PATH_DRIVE = TOKEN_DIR + 'drive-api.json';
+var TOKEN_PATH_DBOX= TOKEN_DIR + "dbox-api.json";
+var DRIVE_PARENT_FOLDER_ID="0BxmjFM_vQC_6fmQ0aXY5TGd5NGRxOE1qQnBrMmtuSWxBMlFsSEJEZUQ1MzlOWnVkUHdSSUk";
+var DBOX_PARENT_FOLDER="Compartida";
 
 var FILE_DB="mispedidos.db";
 var FILES_DIR="./files";
 
 var global_dir=[];
 var global_drive=[];
+var global_authDrive=false;
+var global_authDbox=false;
 
 exports.inicio=function inicio(req,res){
     if(!fs.existsSync(FILE_DB)){
@@ -23,22 +31,24 @@ exports.inicio=function inicio(req,res){
     	console.log("Database Created");
     	db.close();
     }
-    if(fs.existsSync(TOKEN_PATH)){
-        var auth=true;
+    if(fs.existsSync(TOKEN_PATH_DRIVE)){
+        global_authDrive=true;
     }
-    else{
-        var auth=false;
+    if(fs.existsSync(TOKEN_PATH_DBOX)){
+        global_authDbox=true;
     }
-    res.render("index.ejs",{title:"Mis Pedidos",driveAuth:auth});
+    res.render("index.ejs",{title:"Mis Pedidos",driveAuth:global_authDrive,dboxAuth:global_authDbox});
 }
+
+/***AUTENTIFICACION DRIVE*************************************************************/
 
 exports.driveAutentificacion=function driveAutentificacion(req,res){
     oauth2Client=getOauth2Client();
     var authUrl = oauth2Client.generateAuthUrl({
         access_type: 'offline',
-        scope: SCOPES
+        scope: URI_DRIVE
     });
-    res.statusCode = 302;
+    //res.statusCode = 302;
     res.setHeader("Location", authUrl);
     res.end();
 }
@@ -54,8 +64,9 @@ exports.driveGuardarAutentificacion=function driveGuardarAutentificacion(req,res
             throw err;
           }
         }
-        fs.writeFile(TOKEN_PATH, JSON.stringify(token));
-        console.log('Token stored to ' + TOKEN_PATH);
+        fs.writeFile(TOKEN_PATH_DRIVE, JSON.stringify(token));
+        console.log('Token stored to ' + TOKEN_PATH_DRIVE);
+        global_authDrive=true;
         res.render("guardado.ejs",{title:"Acceso a drive"});
     });
 }
@@ -70,6 +81,66 @@ function getOauth2Client(){
     var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
     return oauth2Client;
 }
+
+/**AUTENTIFACION DROPBOX*****************************************************/
+
+exports.dboxAutentificacion=function dboxAutentificacion(req,res){
+    var dboxAuth=getOauth2ClientDbox();
+    var authUrl=URI_DBOX[0]+"?client_id="+dboxAuth.app_key+"&response_type=code&redirect_uri="+dboxAuth.redirect_uri;
+    res.statusCode = 302;
+    res.setHeader("Location", authUrl);
+    res.end();
+};
+
+exports.dboxGuardarAutentificacion=function dboxGuardarAutentificacion(req,res){
+    var dboxAuth=getOauth2ClientDbox();
+    var code=req.query.code;
+    console.log(code);
+    request.post('https://api.dropbox.com/1/oauth2/token', {
+        form: {
+            code: code,
+            grant_type: 'authorization_code',
+            client_id : dboxAuth.app_key,
+            client_secret: dboxAuth.app_secret,
+            redirect_uri: dboxAuth.redirect_uri
+        }
+    }, function (error, response, body) {
+        var data = JSON.parse(body);
+
+        try {
+          fs.mkdirSync(TOKEN_DIR);
+        } catch (err) {
+          if (err.code != 'EEXIST') {
+            throw err;
+          }
+        }
+        fs.writeFile(TOKEN_PATH_DBOX, JSON.stringify(data));
+        global_authDbox=true;
+        res.render("guardado.ejs",{title:"Acceso a dropbox"});
+
+        /*req.session.token=data.access_token;
+        request.post('https://api.dropbox.com/1/account/info', {
+            headers: { Authorization: 'Bearer ' + token }
+        }, function (error, response, body) {
+            res.send('Logged in successfully as ' + JSON.parse(body).display_name + '.');
+        });*/
+
+    });
+
+}
+
+function getOauth2ClientDbox(){
+    var content=fs.readFileSync('client_secret_drop.json');
+    var json=JSON.parse(content);
+    var dboxAuth=new Object();
+    console.log(json.web.app_key);
+    dboxAuth.app_key=json.web.app_key;
+    dboxAuth.app_secret=json.web.app_secret;
+    dboxAuth.redirect_uri=json.web.redirect_uri;
+    return dboxAuth;
+}
+
+/**GESTION FICHEROS******************************************/
 
 exports.gestionFicheros=function gestionFicheros(req, res){
     obtenerArchivosBD(res,sincronizarDirectorioBD);
@@ -156,27 +227,52 @@ function ejecutaSQL(res,SQL_S,db,i){
 }
 
 function listarDrive(res,directorio) {
-    var oauth2Client=getOauth2Client();
-    var token=fs.readFileSync(TOKEN_PATH);
-    oauth2Client.credentials = JSON.parse(token);
-    var items=[];
-    var gDrive = google.drive('v2');
-    gDrive.files.list(
-        {
-            auth: oauth2Client,
-            q: '"' + PARENT_FOLDER_ID + '" in parents'
-        },
-        function(err2, response) {
-            if (err2) {
-                console.log('The API returned an error: ' + err2);
-                return;
+    global_dir=directorio.sort(compareDir);
+
+    if(global_authDrive){
+        var oauth2Client=getOauth2Client();
+        var token=fs.readFileSync(TOKEN_PATH_DRIVE);
+        oauth2Client.credentials = JSON.parse(token);
+        var items=[];
+        var gDrive = google.drive('v2');
+        gDrive.files.list(
+            {
+                auth: oauth2Client,
+                q: '"' + DRIVE_PARENT_FOLDER_ID + '" in parents'
+            },
+            function(err2, response) {
+                if (err2) {
+                    console.log('The API returned an error: ' + err2);
+                    return;
+                }
+                drive = response.items;
+                global_drive=drive.sort(compareDrive);
+                listarDbox(res);
+                res.render("gestion.ejs",{title:"Gestión de Archivos",directorio:directorio,drive:drive});
             }
-            drive = response.items;
-            global_dir=directorio.sort(compareDir);
-            global_drive=drive.sort(compareDrive);
-            res.render("gestion.ejs",{title:"Gestión de Archivos",directorio:directorio,drive:drive});
-        }
-    );
+        );
+    }
+    else{
+        listarDbox(res);
+    }
+}
+
+function listarDbox(res){
+    var URI="https://api.dropbox.com/1/metadata/auto/";
+    var json=fs.readFileSync(TOKEN_PATH_DBOX);
+    var data=JSON.parse(json);
+    var access_token=data.access_token;
+    var dboxAuth=getOauth2ClientDbox();
+
+    request.get(URI+DBOX_PARENT_FOLDER,{
+        headers: { Authorization: 'Bearer ' + access_token },
+        list: true
+    },function(err,response,body){
+        console.log(err);
+        console.log(response);
+        console.log(body);
+    });
+
 }
 
 function compareDir(a,b){
@@ -248,7 +344,7 @@ exports.sincronizarDrive=function sincronizarDrive(req,res){
 
 function insertarDrive(file){
     var oauth2Client=getOauth2Client();
-    var token=fs.readFileSync(TOKEN_PATH);
+    var token=fs.readFileSync(TOKEN_PATH_DRIVE);
     oauth2Client.credentials = JSON.parse(token);
 
     var gDrive=google.drive('v2');
@@ -258,7 +354,7 @@ function insertarDrive(file){
         resource: {
             title: file.nombre,
             mimeType: 'text/csv',
-            parents: [{"id":PARENT_FOLDER_ID}]
+            parents: [{"id":DRIVE_PARENT_FOLDER_ID}]
         },
         media: {
             mimeType: 'text/csv',
@@ -273,7 +369,7 @@ function insertarDrive(file){
 
 function actualizarDrive(file,id_drive){
     var oauth2Client=getOauth2Client();
-    var token=fs.readFileSync(TOKEN_PATH);
+    var token=fs.readFileSync(TOKEN_PATH_DRIVE);
     oauth2Client.credentials = JSON.parse(token);
 
     var gDrive=google.drive('v2');
@@ -298,7 +394,7 @@ function actualizarDrive(file,id_drive){
 
 function eliminarDrive(id_drive){
     var oauth2Client=getOauth2Client();
-    var token=fs.readFileSync(TOKEN_PATH);
+    var token=fs.readFileSync(TOKEN_PATH_DRIVE);
     oauth2Client.credentials = JSON.parse(token);
 
     var gDrive=google.drive('v2');

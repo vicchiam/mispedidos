@@ -40,6 +40,10 @@ app.get("/driveAuth",logica.driveAutentificacion);
 
 app.get("/oauth2callback",logica.driveGuardarAutentificacion);
 
+app.get("/dboxAuth",logica.dboxAutentificacion);
+
+app.get("/oauthcallback_drop",logica.dboxGuardarAutentificacion);
+
 app.get("/gestionFicheros",logica.gestionFicheros);
 
 app.get("/sincronizarDrive",logica.sincronizarDrive);

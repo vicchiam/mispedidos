@@ -1,5 +1,7 @@
 <% if(!driveAuth){ %>
     <a class="ficha" href="/driveAuth"><div id="authDrive">Autenticarse en Drive</div></a>
 <% } %>
-    <a class="ficha" href="#"><div id="authDropbox">Autenticarse en Dropbox</div></a>
+<% if(!dboxAuth){ %>
+    <a class="ficha" href="/dboxAuth"><div id="authDropbox">Autenticarse en Dropbox</div></a>
+<% } %>
     <a class="ficha" href="/gestionFicheros"><div id="gestFicheros">Gestión de ficheros</div></a>

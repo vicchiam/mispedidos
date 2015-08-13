@@ -1,7 +1,7 @@
 var fs = require('fs');
 var google = require('googleapis');
 var googleAuth = require('google-auth-library');
-//var dropbox = require("dbox");
+var Dropbox = require("dropbox");
 var request = require('request');
 var sqlite3 = require("sqlite3").verbose();
 
@@ -12,8 +12,7 @@ var URI_DBOX = ["https://www.dropbox.com/1/oauth2/authorize","https://api.dropbo
 var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE) + '/.credentials/';
 var TOKEN_PATH_DRIVE = TOKEN_DIR + 'drive-api.json';
 var TOKEN_PATH_DBOX= TOKEN_DIR + "dbox-api.json";
-var DRIVE_PARENT_FOLDER_ID="0BxmjFM_vQC_6fmQ0aXY5TGd5NGRxOE1qQnBrMmtuSWxBMlFsSEJEZUQ1MzlOWnVkUHdSSUk";
-var DBOX_PARENT_FOLDER="Compartida";
+var FOLDER="MisPedidos";
 
 var FILE_DB="mispedidos.db";
 var FILES_DIR="./files";
@@ -22,6 +21,8 @@ var global_dir=[];
 var global_drive=[];
 var global_authDrive=false;
 var global_authDbox=false;
+var global_parent_folder_drive="";
+var global_parent_folder_dbox="";
 
 exports.inicio=function inicio(req,res){
     if(!fs.existsSync(FILE_DB)){
@@ -84,6 +85,7 @@ function getOauth2Client(){
 
 /**AUTENTIFACION DROPBOX*****************************************************/
 
+
 exports.dboxAutentificacion=function dboxAutentificacion(req,res){
     var dboxAuth=getOauth2ClientDbox();
     var authUrl=URI_DBOX[0]+"?client_id="+dboxAuth.app_key+"&response_type=code&redirect_uri="+dboxAuth.redirect_uri;
@@ -95,7 +97,6 @@ exports.dboxAutentificacion=function dboxAutentificacion(req,res){
 exports.dboxGuardarAutentificacion=function dboxGuardarAutentificacion(req,res){
     var dboxAuth=getOauth2ClientDbox();
     var code=req.query.code;
-    console.log(code);
     request.post('https://api.dropbox.com/1/oauth2/token', {
         form: {
             code: code,
@@ -118,22 +119,24 @@ exports.dboxGuardarAutentificacion=function dboxGuardarAutentificacion(req,res){
         global_authDbox=true;
         res.render("guardado.ejs",{title:"Acceso a dropbox"});
 
-        /*req.session.token=data.access_token;
+        /*
+        req.session.token=data.access_token;
         request.post('https://api.dropbox.com/1/account/info', {
             headers: { Authorization: 'Bearer ' + token }
         }, function (error, response, body) {
             res.send('Logged in successfully as ' + JSON.parse(body).display_name + '.');
-        });*/
+        });
+        */
 
     });
 
 }
 
+
 function getOauth2ClientDbox(){
     var content=fs.readFileSync('client_secret_drop.json');
     var json=JSON.parse(content);
     var dboxAuth=new Object();
-    console.log(json.web.app_key);
     dboxAuth.app_key=json.web.app_key;
     dboxAuth.app_secret=json.web.app_secret;
     dboxAuth.redirect_uri=json.web.redirect_uri;
@@ -143,10 +146,122 @@ function getOauth2ClientDbox(){
 /**GESTION FICHEROS******************************************/
 
 exports.gestionFicheros=function gestionFicheros(req, res){
-    obtenerArchivosBD(res,sincronizarDirectorioBD);
+    console.log("INICIO GESTION FICHEROS");
+    if(global_authDrive && global_parent_folder_drive==""){
+        comprobarDirectorioDrive(res);
+    }
+    else if(global_authDbox && global_parent_folder_dbox==""){
+
+    }
+    else{
+        obtenerArchivosBD(res,sincronizarDirectorioBD);
+    }
 }
 
+function comprobarDirectorioDrive(res){
+    console.log("COMPROBAR DIRECTORIO");
+    var oauth2Client=getOauth2Client();
+    var token=fs.readFileSync(TOKEN_PATH_DRIVE);
+    oauth2Client.credentials = JSON.parse(token);
+    var items=[];
+    var gDrive = google.drive('v2');
+    gDrive.files.list(
+        {
+            auth: oauth2Client,
+            q: "title='"+FOLDER+"' and mimeType='application/vnd.google-apps.folder'"
+        },
+        function(err, response) {
+            if (err) {
+                console.log('The API returned an error: ' + err);
+                return;
+            }
+            var items=response.items;
+            if(items.length==0){
+                crearDirectorioDrive(res);
+            }
+            else{
+                var id=items[0].id;
+                global_parent_folder_drive=id;
+                comprobarDirectorioDbox(res);
+            }
+        }
+    );
+}
+
+function crearDirectorioDrive(res){
+    console.log("CREAR DIRECTORIO");
+    var oauth2Client=getOauth2Client();
+    var token=fs.readFileSync(TOKEN_PATH_DRIVE);
+    oauth2Client.credentials = JSON.parse(token);
+
+    var gDrive=google.drive('v2');
+    gDrive.files.insert({
+        resource: {
+            title: FOLDER,
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: []
+        },
+        auth: oauth2Client
+        },
+        function(err, response) {
+            if(!err){
+                global_parent_folder_drive=response.id;
+                comprobarDirectorioDbox(res);
+            }
+        }
+    );
+}
+
+function comprobarDirectorioDbox(res){
+    console.log("COMPROBAR DIRECTORIO DBOX");
+    var URI="https://api.dropbox.com/1/search/auto";
+    var json=fs.readFileSync(TOKEN_PATH_DBOX);
+    var data=JSON.parse(json);
+    var access_token=data.access_token;
+    var dboxAuth=getOauth2ClientDbox();
+
+    request.get(URI+"?query="+FOLDER,{
+        headers: { Authorization: 'Bearer ' + access_token }
+    },function(err,response,body){
+        var data=JSON.parse(body);
+        if(data.length==0){
+            crearDirectorioDbox(res);
+        }
+        else{
+            global_parent_folder_dbox=data[0].path;
+            console.log(global_parent_folder_dbox);
+            console.log(data);
+            obtenerArchivosBD(res,sincronizarDirectorioBD);
+        }
+    });
+}
+
+function crearDirectorioDbox(res){
+    console.log("CREAR DIRECTORIO DBOX");
+    var URI="https://api.dropbox.com/1/fileops/create_folder";
+    var json=fs.readFileSync(TOKEN_PATH_DBOX);
+    var data=JSON.parse(json);
+    var access_token=data.access_token;
+    var dboxAuth=getOauth2ClientDbox();
+
+    request.post(URI,{
+        headers: { Authorization: 'Bearer ' + access_token },
+        form: { root: "auto", path: FOLDER }
+    },function(err,response,body){
+        if(!err){
+            var data=JSON.parse(body);
+            global_parent_folder_dbox=data.path;
+            obtenerArchivosBD(res,sincronizarDirectorioBD);
+        }
+
+
+    });
+}
+
+/***SINCRONIZAR******************************************************/
+
 function obtenerArchivosBD(res,callback){
+    console.log("OBTENER ARCHIVOS");
     var db=new sqlite3.Database(FILE_DB);
 	var SQL="SELECT * FROM ARCHIVOS";
     db.all(SQL,function(err,rows){
@@ -156,6 +271,7 @@ function obtenerArchivosBD(res,callback){
 }
 
 function sincronizarDirectorioBD(res,archivos_bd){
+    console.log("SINCRONIZAR DB");
     //Archivos que estan en el directorio
     var archivos_dir=fs.readdirSync(FILES_DIR)
         .map(function(v) {
@@ -215,6 +331,7 @@ function sincronizarDirectorioBD(res,archivos_bd){
 
 //Funcion para sincronizar las operaciones sobre BBDD
 function ejecutaSQL(res,SQL_S,db,i){
+    console.log("EJECUTA SQL_S");
     if(i==SQL_S.length){
         db.close;
         obtenerArchivosBD(res,listarDrive);
@@ -227,6 +344,7 @@ function ejecutaSQL(res,SQL_S,db,i){
 }
 
 function listarDrive(res,directorio) {
+    console.log("LISTAR DRIVE");
     global_dir=directorio.sort(compareDir);
 
     if(global_authDrive){
@@ -238,7 +356,7 @@ function listarDrive(res,directorio) {
         gDrive.files.list(
             {
                 auth: oauth2Client,
-                q: '"' + DRIVE_PARENT_FOLDER_ID + '" in parents'
+                q: '"' + global_parent_folder_drive + '" in parents'
             },
             function(err2, response) {
                 if (err2) {
@@ -258,19 +376,18 @@ function listarDrive(res,directorio) {
 }
 
 function listarDbox(res){
-    var URI="https://api.dropbox.com/1/metadata/auto/";
+    var URI="https://api.dropbox.com/1/metadata/auto";
     var json=fs.readFileSync(TOKEN_PATH_DBOX);
     var data=JSON.parse(json);
     var access_token=data.access_token;
     var dboxAuth=getOauth2ClientDbox();
 
-    request.get(URI+DBOX_PARENT_FOLDER,{
+    request.get(URI+global_parent_folder_dbox,{
         headers: { Authorization: 'Bearer ' + access_token },
         list: true
     },function(err,response,body){
-        console.log(err);
-        console.log(response);
-        console.log(body);
+        var data=JSON.parse(body);
+        console.log(data.contents);
     });
 
 }
@@ -296,6 +413,7 @@ function compareDrive(a,b){
 }
 
 exports.sincronizarDrive=function sincronizarDrive(req,res){
+    console.log("SINCRONIZAR DRIVE");
     var archivos_encontrados=[];
     var mensajes=[];
 
@@ -310,9 +428,7 @@ exports.sincronizarDrive=function sincronizarDrive(req,res){
                 var date_drive=new Date(f_drive.modifiedDate);
                 var d1=Math.ceil(date_dir.getTime()/10000);
                 var d2=Math.ceil(date_drive.getTime()/10000);
-                console.log(d1+"  "+d2);
                 if(d1>d2){
-                    //console.log("Modificar "+global_drive[i].title);
                     actualizarDrive(f_dir,f_drive.id);
                     mensajes.push("Modificado: El archivo "+f_dir[i].nombre+" se ha modificado");
                 }
@@ -343,6 +459,7 @@ exports.sincronizarDrive=function sincronizarDrive(req,res){
 }
 
 function insertarDrive(file){
+    console.log("INSERTAR DRIVE");
     var oauth2Client=getOauth2Client();
     var token=fs.readFileSync(TOKEN_PATH_DRIVE);
     oauth2Client.credentials = JSON.parse(token);
@@ -354,7 +471,7 @@ function insertarDrive(file){
         resource: {
             title: file.nombre,
             mimeType: 'text/csv',
-            parents: [{"id":DRIVE_PARENT_FOLDER_ID}]
+            parents: [{"id":global_parent_folder_drive}]
         },
         media: {
             mimeType: 'text/csv',
@@ -368,6 +485,7 @@ function insertarDrive(file){
 }
 
 function actualizarDrive(file,id_drive){
+    console.log("ACTUALIZAR DRIVE");
     var oauth2Client=getOauth2Client();
     var token=fs.readFileSync(TOKEN_PATH_DRIVE);
     oauth2Client.credentials = JSON.parse(token);
@@ -393,6 +511,7 @@ function actualizarDrive(file,id_drive){
 }
 
 function eliminarDrive(id_drive){
+    console.log("ELIMINAR DRIVE");
     var oauth2Client=getOauth2Client();
     var token=fs.readFileSync(TOKEN_PATH_DRIVE);
     oauth2Client.credentials = JSON.parse(token);

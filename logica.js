@@ -19,6 +19,7 @@ var FILES_DIR="./files";
 
 var global_dir=[];
 var global_drive=[];
+var global_dbox=[];
 var global_authDrive=false;
 var global_authDbox=false;
 var global_parent_folder_drive="";
@@ -85,7 +86,6 @@ function getOauth2Client(){
 
 /**AUTENTIFACION DROPBOX*****************************************************/
 
-
 exports.dboxAutentificacion=function dboxAutentificacion(req,res){
     var dboxAuth=getOauth2ClientDbox();
     var authUrl=URI_DBOX[0]+"?client_id="+dboxAuth.app_key+"&response_type=code&redirect_uri="+dboxAuth.redirect_uri;
@@ -132,7 +132,6 @@ exports.dboxGuardarAutentificacion=function dboxGuardarAutentificacion(req,res){
 
 }
 
-
 function getOauth2ClientDbox(){
     var content=fs.readFileSync('client_secret_drop.json');
     var json=JSON.parse(content);
@@ -143,7 +142,7 @@ function getOauth2ClientDbox(){
     return dboxAuth;
 }
 
-/**GESTION FICHEROS******************************************/
+/**COMPROBAR DIRECTORIOS******************************************/
 
 exports.gestionFicheros=function gestionFicheros(req, res){
     console.log("INICIO GESTION FICHEROS");
@@ -151,7 +150,7 @@ exports.gestionFicheros=function gestionFicheros(req, res){
         comprobarDirectorioDrive(res);
     }
     else if(global_authDbox && global_parent_folder_dbox==""){
-
+        comprobarDirectorioDbox(res);
     }
     else{
         obtenerArchivosBD(res,sincronizarDirectorioBD);
@@ -229,8 +228,6 @@ function comprobarDirectorioDbox(res){
         }
         else{
             global_parent_folder_dbox=data[0].path;
-            console.log(global_parent_folder_dbox);
-            console.log(data);
             obtenerArchivosBD(res,sincronizarDirectorioBD);
         }
     });
@@ -253,12 +250,10 @@ function crearDirectorioDbox(res){
             global_parent_folder_dbox=data.path;
             obtenerArchivosBD(res,sincronizarDirectorioBD);
         }
-
-
     });
 }
 
-/***SINCRONIZAR******************************************************/
+/***SINCRONIZAR DIRECTORIO******************************************************/
 
 function obtenerArchivosBD(res,callback){
     console.log("OBTENER ARCHIVOS");
@@ -333,7 +328,7 @@ function sincronizarDirectorioBD(res,archivos_bd){
 function ejecutaSQL(res,SQL_S,db,i){
     console.log("EJECUTA SQL_S");
     if(i==SQL_S.length){
-        db.close;
+        db.close();
         obtenerArchivosBD(res,listarDrive);
     }
     else{
@@ -342,6 +337,18 @@ function ejecutaSQL(res,SQL_S,db,i){
         });
     }
 }
+
+function compareDir(a,b){
+    if(a.nombre>b.nombre){
+        return 1;
+    }
+    else if (a.nombre<b.nombre) {
+        return -1;
+    }
+    return 0;
+}
+
+/***SINCRONIZAR DRIVE*******************************************/
 
 function listarDrive(res,directorio) {
     console.log("LISTAR DRIVE");
@@ -366,40 +373,12 @@ function listarDrive(res,directorio) {
                 drive = response.items;
                 global_drive=drive.sort(compareDrive);
                 listarDbox(res);
-                res.render("gestion.ejs",{title:"Gestión de Archivos",directorio:directorio,drive:drive});
             }
         );
     }
     else{
         listarDbox(res);
     }
-}
-
-function listarDbox(res){
-    var URI="https://api.dropbox.com/1/metadata/auto";
-    var json=fs.readFileSync(TOKEN_PATH_DBOX);
-    var data=JSON.parse(json);
-    var access_token=data.access_token;
-    var dboxAuth=getOauth2ClientDbox();
-
-    request.get(URI+global_parent_folder_dbox,{
-        headers: { Authorization: 'Bearer ' + access_token },
-        list: true
-    },function(err,response,body){
-        var data=JSON.parse(body);
-        console.log(data.contents);
-    });
-
-}
-
-function compareDir(a,b){
-    if(a.nombre>b.nombre){
-        return 1;
-    }
-    else if (a.nombre<b.nombre) {
-        return -1;
-    }
-    return 0;
 }
 
 function compareDrive(a,b){
@@ -454,7 +433,6 @@ exports.sincronizarDrive=function sincronizarDrive(req,res){
             mensajes.push("Eliminado: El archivo "+global_drive[i].title+" se ha eliminado");
         }
     }
-
     res.render("sincronizar.ejs",{title:"Sincronizar Archivos",mensajes:mensajes});
 }
 
@@ -524,4 +502,97 @@ function eliminarDrive(id_drive){
     function(err, response) {
         //console.log("Eliminar "+err);
     });
+}
+
+/**SINCRONIZAR DROPBOX******************************************/
+
+function listarDbox(res){
+    console.log("LISTAR DBOX");
+    if(global_authDbox){
+        var URI="https://api.dropbox.com/1/metadata/auto";
+        var json=fs.readFileSync(TOKEN_PATH_DBOX);
+        var data=JSON.parse(json);
+        var access_token=data.access_token;
+        var dboxAuth=getOauth2ClientDbox();
+
+        request.get(URI+global_parent_folder_dbox,{
+            headers: { Authorization: 'Bearer ' + access_token },
+            list: true
+        },function(err,response,body){
+            var data=JSON.parse(body);
+            var dbox=data.contents;
+            global_dbox=dbox.sort(compareDbox);
+            console.log(global_dbox);
+            res.render("gestion.ejs",{title:"Gestión de Archivos",directorio:global_dir,drive:global_drive,dbox:global_dbox});
+        });
+    }
+    else{
+        res.render("gestion.ejs",{title:"Gestión de Archivos",directorio:global_dir,drive:global_drive,dbox:global_dbox});
+    }
+}
+
+function compareDbox(aN,bN){
+    var a=extraerNombreDbox(aN);
+    var b=extraerNombreDbox(bN);
+    if(a.title>b.title){
+        return 1;
+    }
+    else if (a.title<b.title) {
+        return -1;
+    }
+    return 0;
+}
+
+exports.sincronizarDbox=function sincronizarDbox(req,res){
+    console.log("SINCRONIZAR DBOX");
+    var archivos_encontrados=[];
+    var mensajes=[];
+
+    for(var i=0;i<global_dir.length;i++){
+        var f_dir=global_dir[i];
+        var encontrado=false;
+        for(var j=0;j<global_drive.length && !encontrado;j++){
+            var f_drive=global_drive[j];
+            if(f_dir.nombre==f_drive.title){
+                encontrado=true;
+                var date_dir=new Date(f_dir.fecha);
+                var date_drive=new Date(f_drive.modifiedDate);
+                var d1=Math.ceil(date_dir.getTime()/10000);
+                var d2=Math.ceil(date_drive.getTime()/10000);
+                if(d1>d2){
+                    actualizarDrive(f_dir,f_drive.id);
+                    mensajes.push("Modificado: El archivo "+f_dir[i].nombre+" se ha modificado");
+                }
+                archivos_encontrados.push(f_drive.title);
+            }
+        }
+    }
+
+    for(var i=0;i<global_dir.length;i++){
+        if(archivos_encontrados.indexOf(global_dir[i].nombre)<0){
+            //Esta en el directorio pero no en el drive - Insertar
+            //console.log(global_dir[i]);
+            insertarDrive(global_dir[i]);
+            mensajes.push("Insertado: El archivo "+global_dir[i].nombre+" se ha insertado");
+        }
+    }
+
+    for(var i=0;i<global_drive.length;i++){
+        if(archivos_encontrados.indexOf(global_drive[i].title)<0){
+            //Esta en el drive pero no en el directorio -> Eliminar
+            //console.log("Eliminar "+global_drive[i].title);
+            eliminarDrive(global_drive[i].id);
+            mensajes.push("Eliminado: El archivo "+global_drive[i].title+" se ha eliminado");
+        }
+    }
+
+    res.render("sincronizar.ejs",{title:"Sincronizar Archivos",mensajes:mensajes});
+}
+
+function extraerNombreDbox(nom){
+    var pos=nom.lastIndexOf("/");
+    if(pos>=0){
+        pos+=1;
+    }
+    return nom.substring(pos);
 }

@@ -4,4 +4,6 @@
 <% if(!dboxAuth){ %>
     <a class="ficha" href="/dboxAuth"><div id="authDropbox">Autenticarse en Dropbox</div></a>
 <% } %>
+<% if(driveAuth || dboxAuth){ %>
     <a class="ficha" href="/gestionFicheros"><div id="gestFicheros">Gestión de ficheros</div></a>
+<% } %>
